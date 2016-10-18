@@ -1,12 +1,12 @@
 //
 // request.c: Does the bulk of the work for the web server.
-// 
+//
 
 #include "cs537.h"
 #include "request.h"
 
 // requestError(      fd,    filename,        "404",    "Not found", "CS537 Server could not find this file");
-void requestError(int fd, char *cause, char *errnum, char *shortmsg, char *longmsg) 
+void requestError(int fd, char *cause, char *errnum, char *shortmsg, char *longmsg)
 {
    char buf[MAXLINE], body[MAXBUF];
 
@@ -55,17 +55,21 @@ void requestReadhdrs(rio_t *rp)
 // Return 1 if static, 0 if dynamic content
 // Calculates filename (and cgiargs, for dynamic) from uri
 //
-int requestParseURI(char *uri, char *filename, char *cgiargs) 
+int requestParseURI(char *uri, char *filename, char *cgiargs)
 {
    char *ptr;
 
    if (!strstr(uri, "cgi")) {
       // static
       strcpy(cgiargs, "");
-      sprintf(filename, ".%s", uri);
-      if (uri[strlen(uri)-1] == '/') {
-         strcat(filename, "home.html");
-      }
+      sprintf(filename, "./Server_files.o/%s", uri);
+      // if (uri[strlen(uri)-1] == '/') {
+      //
+      //    strcat(filename, "home.html");
+      //    printf("'total path is : %s'\n",filename);
+      // }
+      // strcat(filename, "home.html");
+      printf("'total path is : %s'\n",filename);
       return 1;
    } else {
       // dynamic
@@ -86,13 +90,13 @@ int requestParseURI(char *uri, char *filename, char *cgiargs)
 //
 void requestGetFiletype(char *filename, char *filetype)
 {
-   if (strstr(filename, ".html")) 
+   if (strstr(filename, ".html"))
       strcpy(filetype, "text/html");
-   else if (strstr(filename, ".gif")) 
+   else if (strstr(filename, ".gif"))
       strcpy(filetype, "image/gif");
-   else if (strstr(filename, ".jpg")) 
+   else if (strstr(filename, ".jpg"))
       strcpy(filetype, "image/jpeg");
-   else 
+   else
       strcpy(filetype, "text/plain");
 }
 
@@ -100,7 +104,7 @@ void requestServeDynamic(int fd, char *filename, char *cgiargs)
 {
    char buf[MAXLINE], *emptylist[] = {NULL};
 
-   // The server does only a little bit of the header.  
+   // The server does only a little bit of the header.
    // The CGI script has to finish writing out the header.
    sprintf(buf, "HTTP/1.0 200 OK\r\n");
    sprintf(buf, "%sServer: CS537 Web Server\r\n", buf);
@@ -118,7 +122,7 @@ void requestServeDynamic(int fd, char *filename, char *cgiargs)
 }
 
 
-void requestServeStatic(int fd, char *filename, int filesize) 
+void requestServeStatic(int fd, char *filename, int filesize)
 {
    int srcfd;
    char *srcp, filetype[MAXLINE], buf[MAXBUF];
@@ -127,7 +131,7 @@ void requestServeStatic(int fd, char *filename, int filesize)
 
    srcfd = Open(filename, O_RDONLY, 0);
 
-   // Rather than call read() to read the file into memory, 
+   // Rather than call read() to read the file into memory,
    // which would require that we allocate a buffer, we memory-map the file
    srcp = Mmap(0, filesize, PROT_READ, MAP_PRIVATE, srcfd, 0);
    Close(srcfd);
@@ -140,16 +144,16 @@ void requestServeStatic(int fd, char *filename, int filesize)
 
    Rio_writen(fd, buf, strlen(buf));
 
-   //  Writes out to the client socket the memory-mapped file 
+   //  Writes out to the client socket the memory-mapped file
    Rio_writen(fd, srcp, filesize);
    Munmap(srcp, filesize);
 
 }
 
 // handle a request
-void requestHandle(int fd)
+void requestHandle(int *f)
 {
-
+  int fd=*f;
    int is_static;
    struct stat sbuf;
    char buf[MAXLINE], method[MAXLINE], uri[MAXLINE], version[MAXLINE];
@@ -158,6 +162,8 @@ void requestHandle(int fd)
 
    Rio_readinitb(&rio, fd);
    Rio_readlineb(&rio, buf, MAXLINE);
+
+
    sscanf(buf, "%s %s %s", method, uri, version);
 
    printf("%s %s %s\n", method, uri, version);
@@ -169,6 +175,7 @@ void requestHandle(int fd)
    requestReadhdrs(&rio);
 
    is_static = requestParseURI(uri, filename, cgiargs);
+   printf("File to stat : %s\n",filename );
    if (stat(filename, &sbuf) < 0) {
       requestError(fd, filename, "404", "Not found", "CS537 Server could not find this file");
       return;
@@ -188,5 +195,3 @@ void requestHandle(int fd)
       requestServeDynamic(fd, filename, cgiargs);
    }
 }
-
-
