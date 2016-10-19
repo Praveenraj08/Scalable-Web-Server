@@ -47,7 +47,7 @@ void putfd(int connfd)
 
 void consumer()
 {
-  printf("inside producer / buffer_count : %d\n",buffer_count );
+  printf("inside producer / buffer count : %d\n",buffer_count );
 
   while(1)
   {
