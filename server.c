@@ -1,72 +1,131 @@
 #include "cs537.h"
 #include "request.h"
 #include<pthread.h>
+// #include<time.h>
+#include <sys/time.h>
 
-//
-// server.c: A very, very simple web server
-//
-// To run:
-//  server <portnum (above 2000)>
-//
-// Repeatedly handles HTTP requests sent to this port number.
-// Most of the work is done within routines written in request.c
-//
+
+pthread_mutex_t mutex ;
+pthread_cond_t can_fill;
+pthread_cond_t fill;
+int *request_buffer;
+int buffer_size;
+int buffer_count=0;
+int front=0,rear=0;
+
+
 
 // CS537: Parse the new arguments too
 void getargs(int *port, int argc, char *argv[])
 {
-    if (argc < 2) {
-	fprintf(stderr, "Usage: %s <port> <number_of_threads> <size_of_buffer>\n", argv[0]);
-	exit(1);
-    }
-    *port = atoi(argv[1]);
+  if (argc !=4) {
+    // fprintf(stderr, "Usage: %s <port> <number_of_threads> <size_of_buffer>\n", argv[0]);
+    fprintf(stderr,"Usage: %s <port> <number_of_threads> <size_of_buffer>\n",argv[0]);
+    exit(1);
+  }
+  *port = atoi(argv[1]);
 }
 
 
+int getfd()
+{
+
+  int pos=front%buffer_size;
+  int rv=request_buffer[pos]; //get()
+  front++;
+  return rv;
+}
+
+void putfd(int connfd)
+{
+  int pos=rear%buffer_size;
+  request_buffer[pos]=connfd;
+  rear++;
+
+}
+
+
+void consumer()
+{
+  printf("inside producer / buffer_count : %d\n",buffer_count );
+
+  while(1)
+  {
+
+    pthread_mutex_lock(&mutex);
+    // wait while buffer empty
+
+    while(buffer_count==0)
+    pthread_cond_wait(&fill,&mutex); // waiting to be filled
+
+    printf("After cond_wait while \n");
+    int fd=getfd();
+    buffer_count--;
+    printf("Consumer got fd : %d\n",fd );
+    printf("Gng to signal\n");
+    pthread_cond_signal(&can_fill);
+    pthread_mutex_unlock(&mutex);
+
+    printf("Fd gng to requestHandle %d\n",fd );
+    requestHandle(fd);
+    Close(fd);
+
+  }
+
+}
+
 int main(int argc, char *argv[])
 {
-    int listenfd, connfd, port, clientlen;
-    struct sockaddr_in clientaddr;
-    int number_of_threads=atoi(argv[2]);
-    int size_of_buffer=atoi(argv[3]);
-    int request_buffer[size_of_buffer];
-    printf("Number of threads is : %d\n",number_of_threads );
-    pthread_t thread[number_of_threads];
+  int listenfd, connfd, port, clientlen;
+  struct sockaddr_in clientaddr;
+  getargs(&port, argc, argv);
 
-    getargs(&port, argc, argv);
+  int number_of_threads=atoi(argv[2]);
+  buffer_size=atoi(argv[3]);
 
-    //
-    // CS537: Create some threads...
-    //
-    int i=0;
-    for(i=0;i<number_of_threads;i++)
+  request_buffer=malloc(sizeof(int)*buffer_size);
+  printf("Number of threads is : %d\n",number_of_threads );
+  pthread_t thread[number_of_threads];
+
+  pthread_mutex_init(&mutex,NULL);
+  pthread_cond_init(&can_fill,NULL);
+  pthread_cond_init(&fill,NULL);
+
+
+  // CS537: Create some threads...
+  int i=0;
+  for(i=0;i<number_of_threads;i++)
+  {
+    if(pthread_create(&thread[i],NULL,(void *) &consumer,NULL) !=0)
     {
-      if(pthread_create(&thread[i],NULL,(void *) &requestHandle,&connfd) !=0)
-      {
-        printf("pthread create error\n");
-        exit(1);
-      }
-
+      printf("pthread create error\n");
+      exit(1);
     }
+  }
 
-    listenfd = Open_listenfd(port);
-    printf("Listen Fd is : %d\n",listenfd );
-    int buffer_size_itr=1;
-    while (1) {
-	clientlen = sizeof(clientaddr);
-	connfd = Accept(listenfd, (SA *)&clientaddr, (socklen_t *) &clientlen);
-  printf("conn Fd is : %d\n",connfd );
+  listenfd = Open_listenfd(port);
+  printf("Listen Fd is : %d\n",listenfd );
 
-	
-	// CS537: In general, don't handle the request in the main thread.
-	// Save the relevant info in a buffer and have one of the worker threads
-	// do the work.
-	//
+  while (1) {
+    clientlen = sizeof(clientaddr);
+    connfd = Accept(listenfd, (SA *)&clientaddr, (socklen_t *) &clientlen);
+    printf("conn Fd is : %d\n",connfd );
 
-  pthread_join(thread[0],NULL);
-	// requestHandle(connfd);
+    pthread_mutex_lock(&mutex);
+    while(buffer_count==buffer_size) //producer wait if buffer is full
+      pthread_cond_wait(&can_fill,&mutex);
 
-	Close(connfd);
-    }
+    putfd(connfd); //put()
+    buffer_count++;
+    pthread_cond_signal(&fill);
+    pthread_mutex_unlock(&mutex);
+
+
+      // for(i=0;i<number_of_threads;i++)
+    // pthread_join(thread[i],NULL);
+
+
+
+  } //while(1)
 
 }

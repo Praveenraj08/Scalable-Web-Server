@@ -151,9 +151,10 @@ void requestServeStatic(int fd, char *filename, int filesize)
 }
 
 // handle a request
-void requestHandle(int *f)
+void requestHandle(int fd)
 {
-  int fd=*f;
+  printf("Rcvd Fd is %d\n",fd );
+  //  int fd=*f;
    int is_static;
    struct stat sbuf;
    char buf[MAXLINE], method[MAXLINE], uri[MAXLINE], version[MAXLINE];
