@@ -5,6 +5,26 @@
 #include "cs537.h"
 #include "request.h"
 
+char *getFilename(int fd)
+{
+  // printf("\n getFilename -- Executed times -- %d\n",++executed_times );
+  char buf[MAXLINE], method[MAXLINE], uri[MAXLINE], version[MAXLINE];
+  char filename[MAXLINE];
+  rio_t rio;
+
+  Rio_readinitb(&rio, fd);
+  Rio_readlineb(&rio, buf, MAXLINE);
+
+  sscanf(buf, "%s %s %s", method, uri, version);
+  sprintf(filename, "./Server_files.o/%s", uri);
+
+
+  filename_toreturn=filename;
+  // printf("getFilename()-- %s -- %d -- %lu\n",filename_toreturn,fd,pthread_self() );
+  return filename_toreturn;
+
+}
+
 // requestError(      fd,    filename,        "404",    "Not found", "CS537 Server could not find this file");
 void requestError(int fd, char *cause, char *errnum, char *shortmsg, char *longmsg)
 {
@@ -63,13 +83,7 @@ int requestParseURI(char *uri, char *filename, char *cgiargs)
       // static
       strcpy(cgiargs, "");
       sprintf(filename, "./Server_files.o/%s", uri);
-      // if (uri[strlen(uri)-1] == '/') {
-      //
-      //    strcat(filename, "home.html");
-      //    printf("'total path is : %s'\n",filename);
-      // }
-      // strcat(filename, "home.html");
-      printf("'total path is : %s'\n",filename);
+      printf("Parsed -->>> %s \n  %s\n",uri,filename );
       return 1;
    } else {
       // dynamic
@@ -80,7 +94,9 @@ int requestParseURI(char *uri, char *filename, char *cgiargs)
       } else {
          strcpy(cgiargs, "");
       }
-      sprintf(filename, ".%s", uri);
+      sprintf(filename, "./Server_files.o/%s", uri);
+      printf("Parsed -->>> %s \n  %s\n",uri,filename );
+
       return 0;
    }
 }
@@ -176,7 +192,7 @@ void requestHandle(int fd)
    requestReadhdrs(&rio);
 
    is_static = requestParseURI(uri, filename, cgiargs);
-   printf("File to stat : %s\n",filename );
+
    if (stat(filename, &sbuf) < 0) {
       requestError(fd, filename, "404", "Not found", "CS537 Server could not find this file");
       return;

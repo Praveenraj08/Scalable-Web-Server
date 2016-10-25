@@ -1,0 +1,19 @@
+char *getFilename(int fd)
+{
+  // printf("\n getFilename -- Executed times -- %d\n",++executed_times );
+  char buf[MAXLINE], method[MAXLINE], uri[MAXLINE], version[MAXLINE];
+  char filename[MAXLINE];
+  rio_t rio;
+
+  Rio_readinitb(&rio, fd);
+  Rio_readlineb(&rio, buf, MAXLINE);
+
+  sscanf(buf, "%s %s %s", method, uri, version);
+  sprintf(filename, "./Server_files.o/%s", uri);
+
+
+  filename_toreturn=filename;
+  // printf("getFilename()-- %s -- %d -- %lu\n",filename_toreturn,fd,pthread_self() );
+  return filename_toreturn;
+
+}
