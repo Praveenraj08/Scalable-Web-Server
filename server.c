@@ -17,6 +17,22 @@ char *sch_algo=NULL;
 
 sock_msg_t *sock_msg;
 
+void display_filenames()
+{
+  int temp=0;
+
+  while(temp<buffer_size)
+  {
+    if(sock_msg[temp].valid==1)
+    {
+      printf("%s\t",sock_msg[temp].filename);
+    }
+    temp++;
+  }
+}
+
+
+
 // CS537: Parse the new arguments too
 void getargs(int *port, int argc, char *argv[])
 {
@@ -30,16 +46,11 @@ void getargs(int *port, int argc, char *argv[])
 
 int checkFileExists(sock_msg_t *sock)
 {
-  // printf("getFilExists() 00 --> ||%s-- %s-- %s||\n",sock->method,sock->uri,sock->version );
-
-//, buf[MAXLINE];
   struct stat sbuf;
-  printf("FILENAME : %s\n",sock->filename );
   if (stat(sock->filename, &sbuf) < 0) {
      requestError(sock->fd, sock->filename, "404", "Not found", "CS537 Server could not find this file");
      return 1;
   }
-
   return 0;
 }
 
@@ -50,17 +61,13 @@ int putfd(int connfd)
   sock_msg[rear].fd=connfd;
   sock_msg[rear].valid=1;
   getFilename(&sock_msg[rear]);
-  // printf("putfd 00 --> ||%s-- %s-- %s||\n",sock_msg[rear].method,sock_msg[rear].uri,sock_msg[rear].version );
-
   sock_msg[rear].Static=requestParseURI(&sock_msg[rear]);
-  // printf("putfd 01 --> ||%s-- %s-- %s||\n",sock_msg[rear].method,sock_msg[rear].uri,sock_msg[rear].version );
-  // printf("STATIC is %d\n",sock_msg[rear].Static );
+
  if( checkFileExists(&sock_msg[rear]) ==1)
  {
    printf(" File does not exist\n");
    return 1;
  }
- // printf("Socketmsg --> ||%s-- %s-- %s||\n",sock_msg[rear].method,sock_msg[rear].uri,sock_msg[rear].version );
   rear=(rear+1) % buffer_size;
   buffer_count++;
   return 0;
@@ -71,6 +78,7 @@ int sfnf()
   int minFD_pos;
   int minlen=10000,temp=0;
   printf("BUFFER COUNT : %d\n",buffer_count );
+  display_filenames();
   while(temp<buffer_size)
   {
     if( sock_msg[temp].valid==1)
@@ -81,12 +89,10 @@ int sfnf()
         minFD_pos=temp;
       }
     }
-
-
     temp++;
   }
 
-
+printf("Returning minFile : %s\n",sock_msg[minFD_pos].filename );
   return minFD_pos;
 }
 
@@ -96,6 +102,7 @@ int sff()
   int minlen=10000,temp=0;
   struct stat sbuf;
 printf("BUFFER COUNT : %d\n",buffer_count );
+display_filenames();
   while(temp<buffer_size)
   {
     if( sock_msg[temp].valid==1)
@@ -112,7 +119,7 @@ printf("BUFFER COUNT : %d\n",buffer_count );
     temp++;
   }
 
-
+  printf("Returning minFile : %s\n",sock_msg[minFD_pos].filename );
   return minFD_pos;
 }
 
@@ -215,7 +222,6 @@ int main(int argc, char *argv[])
     clientlen = sizeof(clientaddr);
     connfd = Accept(listenfd, (SA *)&clientaddr, (socklen_t *) &clientlen);
     printf("conn Fd is : %d\n",connfd );
-    printf("buff count : %d  front: %d -- rear: %d \n",buffer_count,front,rear);
 
     pthread_mutex_lock(&mutex);
     while(buffer_count==buffer_size) //producer wait if buffer is full
