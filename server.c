@@ -15,7 +15,7 @@ int buffer_count=0;
 int front=0,rear=0;
 char *sch_algo=NULL;
 
-
+sock_msg_t *sock_msg;
 
 // CS537: Parse the new arguments too
 void getargs(int *port, int argc, char *argv[])
@@ -28,46 +28,121 @@ void getargs(int *port, int argc, char *argv[])
   *port = atoi(argv[1]);
 }
 
-
-
-void putfd(int connfd)
+int checkFileExists(sock_msg_t *sock)
 {
+  // printf("getFilExists() 00 --> ||%s-- %s-- %s||\n",sock->method,sock->uri,sock->version );
 
-  request_buffer[rear]=connfd;
+//, buf[MAXLINE];
+  struct stat sbuf;
+  printf("FILENAME : %s\n",sock->filename );
+  if (stat(sock->filename, &sbuf) < 0) {
+     requestError(sock->fd, sock->filename, "404", "Not found", "CS537 Server could not find this file");
+     return 1;
+  }
+
+  return 0;
+}
+
+
+
+int putfd(int connfd)
+{
+  sock_msg[rear].fd=connfd;
+  sock_msg[rear].valid=1;
+  getFilename(&sock_msg[rear]);
+  // printf("putfd 00 --> ||%s-- %s-- %s||\n",sock_msg[rear].method,sock_msg[rear].uri,sock_msg[rear].version );
+
+  sock_msg[rear].Static=requestParseURI(&sock_msg[rear]);
+  // printf("putfd 01 --> ||%s-- %s-- %s||\n",sock_msg[rear].method,sock_msg[rear].uri,sock_msg[rear].version );
+  // printf("STATIC is %d\n",sock_msg[rear].Static );
+ if( checkFileExists(&sock_msg[rear]) ==1)
+ {
+   printf(" File does not exist\n");
+   return 1;
+ }
+ // printf("Socketmsg --> ||%s-- %s-- %s||\n",sock_msg[rear].method,sock_msg[rear].uri,sock_msg[rear].version );
   rear=(rear+1) % buffer_size;
   buffer_count++;
-
-
+  return 0;
 }
+
+int sfnf()
+{
+  int minFD_pos;
+  int minlen=10000,temp=0;
+  printf("BUFFER COUNT : %d\n",buffer_count );
+  while(temp<buffer_size)
+  {
+    if( sock_msg[temp].valid==1)
+    {
+      if(strlen (sock_msg[temp].filename) <= minlen)
+      {
+        minlen=strlen (sock_msg[temp].filename);
+        minFD_pos=temp;
+      }
+    }
+
+
+    temp++;
+  }
+
+
+  return minFD_pos;
+}
+
+int sff()
+{
+  int minFD_pos;
+  int minlen=10000,temp=0;
+  struct stat sbuf;
+printf("BUFFER COUNT : %d\n",buffer_count );
+  while(temp<buffer_size)
+  {
+    if( sock_msg[temp].valid==1)
+    {
+      stat(sock_msg[temp].filename,&sbuf);
+      if(sbuf.st_size <= minlen)
+      {
+        minlen=strlen (sock_msg[temp].filename);
+        minFD_pos=temp;
+      }
+    }
+
+
+    temp++;
+  }
+
+
+  return minFD_pos;
+}
+
 
 int get_fd_from_sch_algo()
 {
-  pthread_mutex_lock(&mutex_buff);
+  // pthread_mutex_lock(&mutex_buff);
 
-  int fd=1;
+  int pos;
   if(strcmp(sch_algo,"FIFO")==0)
   {
-
-    fd=request_buffer[front]; //get()
+    // fd=sock_msg[front];
+    pos=front;
     front=(front+1) % buffer_size;
-
-
   }
   else if(strcmp(sch_algo,"SFNF")==0)
   {
-
+    pos=sfnf();
   }
   else if(strcmp(sch_algo,"SFF")==0)
   {
-
+    pos=sff();
   }
 
-
+sock_msg[pos].valid=-1;
 buffer_count--;
 
-pthread_mutex_unlock(&mutex_buff);
+// pthread_mutex_unlock(&mutex_buff);
 
- return fd;
+ return pos;
 }
 
 
@@ -83,11 +158,20 @@ void consumer()
 
     while(buffer_count==0)
     pthread_cond_wait(&fill,&mutex); // waiting to be filled
-    int fd=get_fd_from_sch_algo();
+    sleep(5);
+    int pos=get_fd_from_sch_algo();
+    int fd=sock_msg[pos].fd;
+    // char *uri=sock_msg[rear].uri;
+    char *filename=sock_msg[pos].filename;
+    char *version=sock_msg[pos].version;
+    char *method=sock_msg[pos].method;
+    char *cgiargs=sock_msg[pos].cgiargs;
+    int Static=sock_msg[pos].Static;
+
     pthread_cond_signal(&can_fill);
     pthread_mutex_unlock(&mutex);
 
-    requestHandle(fd);
+    requestHandle(fd,method,filename,version,cgiargs,Static);
     Close(fd);
 
   }
@@ -101,14 +185,12 @@ int main(int argc, char *argv[])
   getargs(&port, argc, argv);
 
   int number_of_threads=atoi(argv[2]);
+  pthread_t thread[number_of_threads];
   buffer_size=atoi(argv[3]);
   sch_algo=argv[4];
 
-  request_buffer=malloc(sizeof(int)*buffer_size);
-  int k=0;
-  for(k=0;k<buffer_size;k++)
-  request_buffer[k]=-1;
-  pthread_t thread[number_of_threads];
+  sock_msg=malloc(sizeof(sock_msg_t)*buffer_size);
+
 
   pthread_mutex_init(&mutex,NULL);
   pthread_mutex_init(&mutex_buff,NULL);
@@ -139,14 +221,11 @@ int main(int argc, char *argv[])
     while(buffer_count==buffer_size) //producer wait if buffer is full
       pthread_cond_wait(&can_fill,&mutex);
 
-    putfd(connfd); //put()
-    pthread_cond_signal(&fill);
-    pthread_mutex_unlock(&mutex);
-
-
-      // for(i=0;i<number_of_threads;i++)
-    // pthread_join(thread[i],NULL);
-
+    if(putfd(connfd)==0)
+    {
+      pthread_cond_signal(&fill);
+      pthread_mutex_unlock(&mutex);
+    } //put()
 
 
   } //while(1)

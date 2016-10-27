@@ -5,24 +5,25 @@
 #include "cs537.h"
 #include "request.h"
 
-char *getFilename(int fd)
+
+void getFilename(sock_msg_t *sock_msg)
 {
   // printf("\n getFilename -- Executed times -- %d\n",++executed_times );
   char buf[MAXLINE], method[MAXLINE], uri[MAXLINE], version[MAXLINE];
-  char filename[MAXLINE];
-  rio_t rio;
+  // char buf[MAXLINE],*method,*uri,*version;
 
-  Rio_readinitb(&rio, fd);
+  rio_t rio;
+  // printf("sock_msg->fd : %d\n",sock_msg->fd );
+  Rio_readinitb(&rio, sock_msg->fd);
   Rio_readlineb(&rio, buf, MAXLINE);
 
   sscanf(buf, "%s %s %s", method, uri, version);
-  sprintf(filename, "./Server_files.o/%s", uri);
 
+  sock_msg->method=(char *)method;
+  sock_msg->uri=(char *)uri;
+  sock_msg->version=(char *)version;
 
-  filename_toreturn=filename;
-  // printf("getFilename()-- %s -- %d -- %lu\n",filename_toreturn,fd,pthread_self() );
-  return filename_toreturn;
-
+  printf("getFilename() --> %s %s %s\n",sock_msg->method,sock_msg->uri,sock_msg->version );
 }
 
 // requestError(      fd,    filename,        "404",    "Not found", "CS537 Server could not find this file");
@@ -75,15 +76,24 @@ void requestReadhdrs(rio_t *rp)
 // Return 1 if static, 0 if dynamic content
 // Calculates filename (and cgiargs, for dynamic) from uri
 //
-int requestParseURI(char *uri, char *filename, char *cgiargs)
+int requestParseURI(sock_msg_t *sock_msg)
 {
    char *ptr;
+  // char filename[MAXLINE], cgiargs[MAXLINE], uri[MAXLINE];
+  char *filename=malloc(sizeof(char)*MAXLINE);
+  char *cgiargs=malloc(sizeof(char)*MAXLINE);
+  char *uri=sock_msg->uri;
 
+// printf("requestParseURI() 00 --> %s -- %s -- %s\n",uri,filename,cgiargs );
    if (!strstr(uri, "cgi")) {
       // static
       strcpy(cgiargs, "");
       sprintf(filename, "./Server_files.o/%s", uri);
-      printf("Parsed -->>> %s \n  %s\n",uri,filename );
+
+      sock_msg->uri=uri;
+      sock_msg->filename=(char *)filename;
+      sock_msg->cgiargs=(char *)cgiargs;
+      // printf("Parsed_1 -->>> %s \n  %s\n",uri,filename );
       return 1;
    } else {
       // dynamic
@@ -95,8 +105,10 @@ int requestParseURI(char *uri, char *filename, char *cgiargs)
          strcpy(cgiargs, "");
       }
       sprintf(filename, "./Server_files.o/%s", uri);
-      printf("Parsed -->>> %s \n  %s\n",uri,filename );
-
+      printf("Parsed_2 -->>> %s \n  %s\n",uri,filename );
+      sock_msg->uri=uri;
+      sock_msg->filename=(char *)filename;
+      sock_msg->cgiargs=cgiargs;
       return 0;
    }
 }
@@ -167,31 +179,30 @@ void requestServeStatic(int fd, char *filename, int filesize)
 }
 
 // handle a request
-void requestHandle(int fd)
+void requestHandle(int fd_req,char *method_req,char *filename_req,char *version_req,char *cgiargs_req, int Static_req)
 {
+  int fd=fd_req;
   printf("Rcvd Fd is %d\n",fd );
-  //  int fd=*f;
-   int is_static;
+   int is_static=Static_req;
    struct stat sbuf;
-   char buf[MAXLINE], method[MAXLINE], uri[MAXLINE], version[MAXLINE];
-   char filename[MAXLINE], cgiargs[MAXLINE];
-   rio_t rio;
+   char *method=method_req,*filename=filename_req,*version=version_req;
+   char *cgiargs=cgiargs_req;
+  //  char filename[MAXLINE], cgiargs[MAXLINE], buf[MAXLINE];
+  //  rio_t rio;
 
-   Rio_readinitb(&rio, fd);
-   Rio_readlineb(&rio, buf, MAXLINE);
+  //  Rio_readinitb(&rio, sock_msg->fd);
+  //  Rio_readlineb(&rio, buf, MAXLINE);
 
-
-   sscanf(buf, "%s %s %s", method, uri, version);
-
-   printf("%s %s %s\n", method, uri, version);
+   printf("requestHandle  %s %s %s\n", method, filename, version);
 
    if (strcasecmp(method, "GET")) {
       requestError(fd, method, "501", "Not Implemented", "CS537 Server does not implement this method");
       return;
    }
-   requestReadhdrs(&rio);
 
-   is_static = requestParseURI(uri, filename, cgiargs);
+  //  requestReadhdrs(&rio);
+
+  //  is_static = requestParseURI(uri, filename, cgiargs);
 
    if (stat(filename, &sbuf) < 0) {
       requestError(fd, filename, "404", "Not found", "CS537 Server could not find this file");
@@ -211,4 +222,5 @@ void requestHandle(int fd)
       }
       requestServeDynamic(fd, filename, cgiargs);
    }
+printf("End of requestHandle\n");
 }

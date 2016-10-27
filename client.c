@@ -33,7 +33,7 @@
  pthread_mutex_t mutex_1;
 
  char *host;
- int port,filename_itr=0;
+ int port,filename_itr=-1;
 
 
 void clientSend(int fd, char *filename)
@@ -75,10 +75,12 @@ void clientPrint(int fd)
 
   /* Read and display the HTTP Body */
   n = Rio_readlineb(&rio, buf, MAXBUF);
+  printf("gng to while / n : %d\n",n );
   while (n > 0) {
     printf("%s", buf);
     n = Rio_readlineb(&rio, buf, MAXBUF);
   }
+  printf("while done \n");
 
 }
 double Time_GetSeconds() {
@@ -94,7 +96,7 @@ void sender(char **filename)
   int clientfd;
   double t1,t2;
   clientfd = Open_clientfd(host, port);
-  printf("Sending file %s -- %d \n",filename[filename_itr],clientfd );
+  printf("Sending file %s -- %d \n",filename[++filename_itr],clientfd );
 
   t1=Time_GetSeconds();
 
@@ -123,12 +125,12 @@ int main(int argc, char *argv[])
   host = argv[1];
   port = atoi(argv[2]);
   // filename = argv[3];
-  char *filename[8]={ "output.cgi ", "car.html ",
+  char *filename[8]={  "home.html ","car.html ",
                   "fiftyfive_file.html ", "fourth_file.html ",
-                  "home.html ", "six_files.html "
+                   "six_files.html ","output.cgi ",
                   "h.html ", "third_file.html "};
   int i=0;
-  int t=100;
+  int t=3;
   for(i=0;i<t;i++)
   {
     if(pthread_create(&threads[i],NULL,(void *) &sender,&filename) !=0)
